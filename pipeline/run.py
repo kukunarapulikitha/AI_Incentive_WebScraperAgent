@@ -7,6 +7,7 @@ import structlog
 from config.regions import Region
 from config.sources import SourceConfig, select_sources
 from extractors import get_extractor
+from extractors.static_extractor import StaticExtractor
 from parsers.llm_parser import LLMClient, parse_doc
 from parsers.schema import CSV_COLUMN_ORDER, IncentiveRecord
 from validators.validator import validate
@@ -67,47 +68,73 @@ def run(
     log.info("pipeline.start", region=region.slug, n_sources=len(sources))
 
     client = LLMClient(force_provider=llm_provider)
+    static_fallback = StaticExtractor()
     all_records: list[IncentiveRecord] = []
     per_source: Counter[str] = Counter()
 
+    def _ingest(records: list[dict], source_key: str) -> int:
+        """Validate, region-stamp, and append. Returns count added."""
+        added = 0
+        if limit_per_source:
+            records = records[:limit_per_source]
+        for d in records:
+            rec = validate(d)
+            if rec is None:
+                continue
+            _stamp_region(rec, region)
+            all_records.append(rec)
+            per_source[source_key] += 1
+            added += 1
+        return added
+
     for source in sources:
+        added_for_source = 0
         try:
             extractor = get_extractor(source)
 
-            # Deterministic-parse path: extractors that pre-parse records
-            # (e.g. DSIRE spider) skip the LLM entirely.
+            # Path 1: extractors that pre-parse records (DSIRE spider,
+            # StaticExtractor) skip the LLM entirely.
             if hasattr(extractor, "parse_records"):
                 raw_records = extractor.parse_records(source, region)
-                if limit_per_source:
-                    raw_records = raw_records[:limit_per_source]
-                for d in raw_records:
-                    rec = validate(d)
-                    if rec is None:
-                        continue
-                    _stamp_region(rec, region)
-                    all_records.append(rec)
-                    per_source[source.key] += 1
-                continue
-
-            # LLM path: extractor returns RawDocs, LLM parses them.
-            if hasattr(extractor, "extract_many"):
-                raws = extractor.extract_many(source)
+                added_for_source += _ingest(raw_records, source.key)
             else:
-                raws = [extractor.extract(source)]
-
-            for raw in raws:
-                raw_records = parse_doc(raw, source, region, client)
-                if limit_per_source:
-                    raw_records = raw_records[:limit_per_source]
-                for d in raw_records:
-                    rec = validate(d)
-                    if rec is None:
-                        continue
-                    _stamp_region(rec, region)
-                    all_records.append(rec)
-                    per_source[source.key] += 1
+                # Path 2: extract → LLM parse.
+                if hasattr(extractor, "extract_many"):
+                    raws = extractor.extract_many(source)
+                else:
+                    raws = [extractor.extract(source)]
+                for raw in raws:
+                    try:
+                        raw_records = parse_doc(raw, source, region, client)
+                    except Exception as parse_err:
+                        log.warning(
+                            "pipeline.llm_parse_failed",
+                            source=source.key,
+                            error=str(parse_err),
+                        )
+                        raw_records = []
+                    added_for_source += _ingest(raw_records, source.key)
         except Exception as e:
             log.error("pipeline.source_failed", source=source.key, error=str(e))
+
+        # Dynamic fallback: if the primary path produced no records (LLM rate
+        # limit, bot detection, network error, missing API key, etc.) and we
+        # have curated static records for this source, use them. Lets the
+        # pipeline always emit a complete CSV without depending on Groq quota
+        # or fragile utility/government-site scrapers.
+        if added_for_source == 0 and not isinstance(extractor, StaticExtractor):
+            try:
+                static_records = static_fallback.parse_records(source, region)
+            except Exception as e:
+                log.warning("pipeline.static_fallback_failed", source=source.key, error=str(e))
+                static_records = []
+            if static_records:
+                log.info(
+                    "pipeline.static_fallback",
+                    source=source.key,
+                    n=len(static_records),
+                )
+                _ingest(static_records, source.key)
 
     deduped = _dedupe(all_records)
     review_count = sum(1 for r in deduped if r.review_needed == "Yes")
