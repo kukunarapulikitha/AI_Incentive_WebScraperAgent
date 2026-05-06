@@ -58,7 +58,7 @@ Columns (exact order required by spec):
 | `pdf` | Government PDF documents — pdfplumber |
 | `api` | JSON APIs — pretty-prints response for LLM |
 | `apify` | Apify actors (DSIRE crawler with `APIFY_TOKEN`) |
-| `dsire_spider` | Two-pass DSIRE scraper: list page → 50 detail pages → batched LLM calls |
+| `dsire_spider` | Two-pass DSIRE scraper: list page → up to 75 detail pages → deterministic field parser (no LLM, region-filtered) |
 
 ## Sources (17 configured)
 
@@ -70,7 +70,37 @@ Some utility sites (TECO, Duke, FL Housing portal) actively block scrapers; thes
 
 ## Adding a new source
 
-Edit `config/sources.py` — add a `SourceConfig` entry. Tag `applicable_states` (`["ALL"]` for federal, `["FL"]` for Florida-specific). Pick `extractor_type` from `html` / `playwright` / `pdf` / `api` / `apify` / `dsire_spider`. No other code changes needed.
+You have two options:
+
+**1. CLI (no code changes) — recommended for one-offs.** Custom sources are stored in `config/custom_sources.json` and merged into the registry on every run.
+
+```bash
+# Add
+python main.py add-source \
+  --key tampa_solar_coop \
+  --name "Tampa Solar United Neighbors Co-op" \
+  --url "https://www.solarunitedneighbors.org/florida/" \
+  --extractor html \
+  --priority P2 \
+  --states FL \
+  --default-city Tampa \
+  --admin "Solar United Neighbors"
+
+# Use it immediately
+python main.py --sources tampa_solar_coop --dry-run
+
+# List everything (built-in + custom)
+python main.py list-sources
+
+# Remove a custom source
+python main.py remove-source --key tampa_solar_coop
+```
+
+`--extractor` ∈ `html` / `playwright` / `pdf` / `api` / `apify` / `dsire_spider`.
+`--states` is comma-separated (`FL`, `FL,GA`) or `ALL` for federal.
+Built-in source keys cannot be overridden or removed via CLI.
+
+**2. Edit `config/sources.py`** — add a `SourceConfig` to the dict for permanent built-in sources you want tracked in git.
 
 ## Adding a new region
 
@@ -83,7 +113,8 @@ Incentive_Scraper/
 ├── main.py                       # CLI
 ├── config/
 │   ├── regions.py                # Region presets (tampa_hillsborough, tampa_bay_msa, florida_statewide)
-│   └── sources.py                # 17-source registry
+│   ├── sources.py                # 17-source built-in registry + custom-source loader/writer
+│   └── custom_sources.json       # User-added sources (managed by `main.py add-source`)
 ├── extractors/
 │   ├── base.py                   # ABC, rate limiting, retries
 │   ├── html_extractor.py         # requests + Trafilatura + BS4 fallback
