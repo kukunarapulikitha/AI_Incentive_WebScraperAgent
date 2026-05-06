@@ -1,4 +1,10 @@
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+VALID_EXTRACTOR_TYPES = {"html", "pdf", "api", "playwright", "apify", "dsire_spider"}
+VALID_PRIORITIES = {"P0", "P1", "P2"}
+_CUSTOM_SOURCES_PATH = Path(__file__).resolve().parent / "custom_sources.json"
 
 
 @dataclass
@@ -213,6 +219,93 @@ SOURCES: dict[str, SourceConfig] = {
 }
 
 
+def _load_custom_sources() -> dict[str, SourceConfig]:
+    """Load user-defined sources from config/custom_sources.json (if present).
+
+    The file is a JSON array of source objects with the same fields as
+    SourceConfig. Hand-editable; also written by `main.py add-source`.
+    """
+    if not _CUSTOM_SOURCES_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(_CUSTOM_SOURCES_PATH.read_text() or "[]")
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"custom_sources.json is not valid JSON: {e}. Fix or delete the file."
+        ) from e
+    out: dict[str, SourceConfig] = {}
+    for item in raw:
+        cfg = SourceConfig(
+            key=item["key"],
+            name=item["name"],
+            url=item["url"],
+            extractor_type=item["extractor_type"],
+            priority=item.get("priority", "P1"),
+            applicable_states=item.get("applicable_states", ["ALL"]),
+            default_state=item.get("default_state", "USA"),
+            default_city=item.get("default_city"),
+            default_administrator=item.get("default_administrator"),
+            notes=item.get("notes", ""),
+        )
+        out[cfg.key] = cfg
+    return out
+
+
+def _read_custom_sources_raw() -> list[dict]:
+    if not _CUSTOM_SOURCES_PATH.exists():
+        return []
+    return json.loads(_CUSTOM_SOURCES_PATH.read_text() or "[]")
+
+
+def _write_custom_sources_raw(items: list[dict]) -> None:
+    _CUSTOM_SOURCES_PATH.write_text(json.dumps(items, indent=2) + "\n")
+
+
+def add_custom_source(cfg: SourceConfig, *, overwrite: bool = False) -> None:
+    """Append a SourceConfig to custom_sources.json. Raises if the key clashes
+    with a built-in source or an existing custom source (unless overwrite=True).
+
+    Mutates the in-memory `SOURCES` dict so the new source is usable in the
+    same process — useful for `main.py add-source && main.py --sources <key>`.
+    """
+    if cfg.key in BUILTIN_SOURCES:
+        raise ValueError(
+            f"key {cfg.key!r} clashes with a built-in source — pick a different key."
+        )
+    if cfg.extractor_type not in VALID_EXTRACTOR_TYPES:
+        raise ValueError(
+            f"extractor_type {cfg.extractor_type!r} not in {sorted(VALID_EXTRACTOR_TYPES)}"
+        )
+    if cfg.priority not in VALID_PRIORITIES:
+        raise ValueError(f"priority {cfg.priority!r} not in {sorted(VALID_PRIORITIES)}")
+
+    items = _read_custom_sources_raw()
+    existing_idx = next((i for i, x in enumerate(items) if x.get("key") == cfg.key), None)
+    if existing_idx is not None and not overwrite:
+        raise ValueError(
+            f"custom source {cfg.key!r} already exists — pass overwrite=True to replace."
+        )
+
+    payload = asdict(cfg)
+    if existing_idx is not None:
+        items[existing_idx] = payload
+    else:
+        items.append(payload)
+    _write_custom_sources_raw(items)
+    SOURCES[cfg.key] = cfg
+
+
+def remove_custom_source(key: str) -> bool:
+    """Remove a custom source by key. Returns True if removed, False if not found."""
+    items = _read_custom_sources_raw()
+    new_items = [x for x in items if x.get("key") != key]
+    if len(new_items) == len(items):
+        return False
+    _write_custom_sources_raw(new_items)
+    SOURCES.pop(key, None)
+    return True
+
+
 def select_sources(
     region_state: str,
     only_keys: list[str] | None = None,
@@ -224,3 +317,9 @@ def select_sources(
         s for s in SOURCES.values()
         if "ALL" in s.applicable_states or region_state.upper() in s.applicable_states
     ]
+
+
+# Snapshot the built-in sources before merging custom ones so add_custom_source
+# can detect collisions with the curated registry.
+BUILTIN_SOURCES: dict[str, SourceConfig] = dict(SOURCES)
+SOURCES.update(_load_custom_sources())

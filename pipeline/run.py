@@ -44,7 +44,22 @@ def run(
     for source in sources:
         try:
             extractor = get_extractor(source)
-            # Spider extractors return multiple docs (one per program page)
+
+            # Deterministic-parse path: extractors that pre-parse records
+            # (e.g. DSIRE spider) skip the LLM entirely.
+            if hasattr(extractor, "parse_records"):
+                raw_records = extractor.parse_records(source, region)
+                if limit_per_source:
+                    raw_records = raw_records[:limit_per_source]
+                for d in raw_records:
+                    rec = validate(d)
+                    if rec is None:
+                        continue
+                    all_records.append(rec)
+                    per_source[source.key] += 1
+                continue
+
+            # LLM path: extractor returns RawDocs, LLM parses them.
             if hasattr(extractor, "extract_many"):
                 raws = extractor.extract_many(source)
             else:
