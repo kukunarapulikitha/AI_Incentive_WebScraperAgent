@@ -13,6 +13,35 @@ from validators.validator import validate
 
 log = structlog.get_logger()
 
+# Map two-letter state codes to the full state name we want in the CSV.
+# Extend as we add more regions.
+_STATE_CODE_TO_NAME = {
+    "FL": "Florida",
+    "CA": "California",
+    "TX": "Texas",
+    "NY": "New York",
+    "GA": "Georgia",
+}
+
+
+def _stamp_region(rec: IncentiveRecord, region: Region) -> IncentiveRecord:
+    """Override `state` and `city` on every record so the CSV consistently
+    reflects the region the user is filtering for.
+
+    Why: federal sources (IRS, FEMA, DOE, Rewiring America) have
+    `default_state="USA"`, which the LLM then copies into `state`. But if
+    you're scraping for Tampa, every record in the output is — by
+    definition — applicable to Florida/Tampa, so the CSV should say so.
+    "USA" / "Federal" / "All States" are program-classification labels,
+    not values that belong in a `state` column scoped to a region.
+    """
+    if region.state:
+        full_name = _STATE_CODE_TO_NAME.get(region.state.upper(), region.state)
+        rec.state = full_name
+    if region.cities:
+        rec.city = region.cities[0]
+    return rec
+
 
 def _dedupe(records: list[IncentiveRecord]) -> list[IncentiveRecord]:
     seen: set[tuple[str, str]] = set()
@@ -55,6 +84,7 @@ def run(
                     rec = validate(d)
                     if rec is None:
                         continue
+                    _stamp_region(rec, region)
                     all_records.append(rec)
                     per_source[source.key] += 1
                 continue
@@ -73,6 +103,7 @@ def run(
                     rec = validate(d)
                     if rec is None:
                         continue
+                    _stamp_region(rec, region)
                     all_records.append(rec)
                     per_source[source.key] += 1
         except Exception as e:
