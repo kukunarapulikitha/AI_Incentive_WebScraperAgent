@@ -91,6 +91,18 @@ SOURCES: dict[str, SourceConfig] = {
         default_administrator="IRS",
         notes="Detailed 25C page — windows, doors, HVAC, insulation, audits.",
     ),
+    "hillsborough_disaster_recovery": SourceConfig(
+        key="hillsborough_disaster_recovery",
+        name="Rebuilding for Tomorrow — Homeowner Repair & Reconstruction (Hurricanes Helene/Milton)",
+        url="https://rebuildingfortomorrow.hcfl.gov/en-US/H/SFH/?id=cf6516e0-9f24-f111-8341-7ced8d6f4b5b",
+        extractor_type="html",
+        priority="P0",
+        applicable_states=["FL"],
+        default_state="Florida",
+        default_city="Tampa",
+        default_administrator="Hillsborough County Community Development",
+        notes="CDBG-DR disaster recovery program for Hurricane Helene/Milton (2024). Up to $350K reconstruction + $150K repair assistance.",
+    ),
     "fl_solar_tax_exemptions": SourceConfig(
         key="fl_solar_tax_exemptions",
         name="Florida Solar Sales Tax & Property Tax Exemptions",

@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "key": "hillsborough_hrrp",
+    "name": "Rebuilding for Tomorrow HRRP",
+    "url": "https://rebuildingfortomorrow.hcfl.gov/en-US/H/SFH/?id=cf6516e0-9f24-f111-8341-7ced8d6f4b5b",
+    "extractor_type": "html",
+    "priority": "P1",
+    "applicable_states": [
+      "FL"
+    ],
+    "default_state": "FL",
+    "default_city": "Tampa",
+    "default_administrator": "Hillsborough County",
+    "notes": "",
+    "api_params": {}
+  }
+]

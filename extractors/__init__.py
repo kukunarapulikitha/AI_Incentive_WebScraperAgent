@@ -6,7 +6,6 @@ from extractors.api_extractor import ApiExtractor
 from extractors.apify_extractor import ApifyExtractor
 from extractors.playwright_extractor import PlaywrightExtractor
 from extractors.dsire_spider import DSIRESpiderExtractor
-from extractors.static_extractor import StaticExtractor
 
 _EXTRACTORS: dict[str, type[BaseExtractor]] = {
     "html": HtmlExtractor,
@@ -15,7 +14,6 @@ _EXTRACTORS: dict[str, type[BaseExtractor]] = {
     "apify": ApifyExtractor,
     "playwright": PlaywrightExtractor,
     "dsire_spider": DSIRESpiderExtractor,
-    "static": StaticExtractor,
 }
 
 
