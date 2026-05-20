@@ -7,7 +7,6 @@ import structlog
 from config.regions import Region
 from config.sources import SourceConfig, select_sources
 from extractors import get_extractor
-from extractors.static_extractor import StaticExtractor
 from parsers.llm_parser import LLMClient, parse_doc
 from parsers.schema import CSV_COLUMN_ORDER, IncentiveRecord
 from validators.validator import validate
@@ -68,7 +67,6 @@ def run(
     log.info("pipeline.start", region=region.slug, n_sources=len(sources))
 
     client = LLMClient(force_provider=llm_provider)
-    static_fallback = StaticExtractor()
     all_records: list[IncentiveRecord] = []
     per_source: Counter[str] = Counter()
 
@@ -116,25 +114,6 @@ def run(
                     added_for_source += _ingest(raw_records, source.key)
         except Exception as e:
             log.error("pipeline.source_failed", source=source.key, error=str(e))
-
-        # Dynamic fallback: if the primary path produced no records (LLM rate
-        # limit, bot detection, network error, missing API key, etc.) and we
-        # have curated static records for this source, use them. Lets the
-        # pipeline always emit a complete CSV without depending on Groq quota
-        # or fragile utility/government-site scrapers.
-        if added_for_source == 0 and not isinstance(extractor, StaticExtractor):
-            try:
-                static_records = static_fallback.parse_records(source, region)
-            except Exception as e:
-                log.warning("pipeline.static_fallback_failed", source=source.key, error=str(e))
-                static_records = []
-            if static_records:
-                log.info(
-                    "pipeline.static_fallback",
-                    source=source.key,
-                    n=len(static_records),
-                )
-                _ingest(static_records, source.key)
 
     deduped = _dedupe(all_records)
     review_count = sum(1 for r in deduped if r.review_needed == "Yes")

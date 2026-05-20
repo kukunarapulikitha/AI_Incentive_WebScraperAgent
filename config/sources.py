@@ -2,7 +2,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-VALID_EXTRACTOR_TYPES = {"html", "pdf", "api", "playwright", "apify", "dsire_spider", "static"}
+VALID_EXTRACTOR_TYPES = {"html", "pdf", "api", "playwright", "apify", "dsire_spider"}
 VALID_PRIORITIES = {"P0", "P1", "P2"}
 _CUSTOM_SOURCES_PATH = Path(__file__).resolve().parent / "custom_sources.json"
 
@@ -44,7 +44,7 @@ SOURCES: dict[str, SourceConfig] = {
         applicable_states=["ALL"],
         default_state="USA",
         default_administrator="Federal / IRS",
-        notes="IRA policy page. Live html+LLM scrape; falls back to static_records.json on LLM rate-limit / 0 records.",
+        notes="IRA policy page. Live html+LLM scrape.",
     ),
     "irs_energy_credits": SourceConfig(
         key="irs_energy_credits",
@@ -56,18 +56,6 @@ SOURCES: dict[str, SourceConfig] = {
         default_state="USA",
         default_administrator="IRS",
         notes="25C + 25D federal credits. Static HTML, no JS needed.",
-    ),
-    "teco_rebates": SourceConfig(
-        key="teco_rebates",
-        name="TECO Residential Rebates",
-        url="https://www.tampaelectric.com/home/save-energy/rebates/",
-        extractor_type="static",
-        priority="P0",
-        applicable_states=["FL"],
-        default_state="Florida",
-        default_city="Tampa",
-        default_administrator="Tampa Electric (TECO)",
-        notes="Static records — TECO blocks scrapers; rebates curated in static_records.json.",
     ),
     "doe_energy_saver": SourceConfig(
         key="doe_energy_saver",
@@ -90,7 +78,7 @@ SOURCES: dict[str, SourceConfig] = {
         applicable_states=["FL"],
         default_state="Florida",
         default_administrator="Florida Department of Financial Services",
-        notes="Hurricane mitigation grant — up to $10K. Live html+LLM; falls back to static_records.json on 0 records.",
+        notes="Hurricane mitigation grant — up to $10K.",
     ),
     "irs_energy_credits_detail": SourceConfig(
         key="irs_energy_credits_detail",
@@ -103,40 +91,6 @@ SOURCES: dict[str, SourceConfig] = {
         default_administrator="IRS",
         notes="Detailed 25C page — windows, doors, HVAC, insulation, audits.",
     ),
-    "duke_fl_rebates": SourceConfig(
-        key="duke_fl_rebates",
-        name="Duke Energy Florida Rebates",
-        url="https://www.duke-energy.com/home/products/rebates",
-        extractor_type="static",
-        priority="P1",
-        applicable_states=["FL"],
-        default_state="Florida",
-        default_administrator="Duke Energy Florida",
-        notes="Static — Duke blocks scrapers; HVAC rebate curated in static_records.json.",
-    ),
-    "fl_housing": SourceConfig(
-        key="fl_housing",
-        name="Florida Housing Finance Corporation",
-        url="https://floridahousing.org/homebuyers-homeowners/homeowners",
-        extractor_type="static",
-        priority="P1",
-        applicable_states=["FL"],
-        default_state="Florida",
-        default_administrator="Florida Housing Finance Corporation",
-        notes="Static — Hometown Heroes DPA + SHIP curated in static_records.json.",
-    ),
-    "hillsborough_housing": SourceConfig(
-        key="hillsborough_housing",
-        name="Hillsborough County Affordable Housing",
-        url="https://hcfl.gov/housing",
-        extractor_type="static",
-        priority="P1",
-        applicable_states=["FL"],
-        default_state="Florida",
-        default_city="Tampa",
-        default_administrator="Hillsborough County",
-        notes="Static — SHIP DPA + Owner-Occupied Rehab curated in static_records.json.",
-    ),
     "fl_solar_tax_exemptions": SourceConfig(
         key="fl_solar_tax_exemptions",
         name="Florida Solar Sales Tax & Property Tax Exemptions",
@@ -148,30 +102,7 @@ SOURCES: dict[str, SourceConfig] = {
         default_administrator="State of Florida / Department of Revenue",
         notes="DOE homeowner guide covers FL property tax and sales tax solar exemptions.",
     ),
-    "fl_energy_programs": SourceConfig(
-        key="fl_energy_programs",
-        name="Florida Energy Programs (DEO)",
-        url="https://www.floridajobs.org/community-planning-and-development/assistance-for-governments-and-organizations/energy",
-        extractor_type="static",
-        priority="P1",
-        applicable_states=["FL"],
-        default_state="Florida",
-        default_administrator="Florida Department of Economic Opportunity",
-        notes="Static — DEO page returns 103 chars (bot-blocked). Add records to static_records.json when needed.",
-    ),
     # ── P2 ───────────────────────────────────────────────────────────────────
-    "city_tampa_dev": SourceConfig(
-        key="city_tampa_dev",
-        name="City of Tampa Community Development",
-        url="https://www.tampa.gov/housing-and-community-development",
-        extractor_type="static",
-        priority="P2",
-        applicable_states=["FL"],
-        default_state="Florida",
-        default_city="Tampa",
-        default_administrator="City of Tampa",
-        notes="Static — Owner-Occupied Rehab + DPA curated in static_records.json.",
-    ),
     "fema_mitigation": SourceConfig(
         key="fema_mitigation",
         name="FEMA Hazard Mitigation Grants",
@@ -181,29 +112,7 @@ SOURCES: dict[str, SourceConfig] = {
         applicable_states=["ALL"],
         default_state="USA",
         default_administrator="FEMA",
-        notes="HMGP + BRIC. Live html+LLM; falls back to static_records.json on 0 records (FEMA pages don't expose program $ caps).",
-    ),
-    "ygrene_pace": SourceConfig(
-        key="ygrene_pace",
-        name="Florida PACE Financing",
-        url="https://floridapace.org/",
-        extractor_type="static",
-        priority="P2",
-        applicable_states=["FL"],
-        default_state="Florida",
-        default_administrator="Florida PACE Funding Agency / RenewPACE / FRED",
-        notes="Static — PACE financing curated in static_records.json. Ygrene exited FL; renamed entry.",
-    ),
-    "pace_florida": SourceConfig(
-        key="pace_florida",
-        name="Florida PACE Funding Agency (FPFA)",
-        url="https://floridapace.org/",
-        extractor_type="static",
-        priority="P2",
-        applicable_states=["FL"],
-        default_state="Florida",
-        default_administrator="Florida PACE Funding Agency",
-        notes="Static — duplicate of ygrene_pace; dedupe logic drops on (program_name, state).",
+        notes="HMGP + BRIC. Live html+LLM scrape.",
     ),
     "doe_weatherization": SourceConfig(
         key="doe_weatherization",
@@ -214,7 +123,7 @@ SOURCES: dict[str, SourceConfig] = {
         applicable_states=["ALL"],
         default_state="USA",
         default_administrator="U.S. Department of Energy",
-        notes="Federal WAP. Live html+LLM; falls back to static_records.json on 0 records.",
+        notes="Federal WAP. Live html+LLM scrape.",
     ),
 }
 
